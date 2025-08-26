@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Location Form Gate</title>
+    <!-- Load Tailwind CSS from CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter font -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            @apply bg-gray-100;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <!-- Main Container -->
+    <div id="container" class="bg-white p-8 rounded-2xl shadow-xl max-w-lg w-full text-center">
+        
+        <!-- Header -->
+        <h1 class="text-3xl font-bold mb-4 text-gray-800">Location-Based Form Access</h1>
+        <p class="text-gray-600 mb-6">Please verify your identity and location to access the form.</p>
+
+        <!-- Status Message Box -->
+        <div id="status-box" class="p-4 rounded-xl border border-gray-300 text-gray-700 font-medium mb-6 transition-all duration-300 ease-in-out">
+            Please enter your dealer name.
+        </div>
+
+        <!-- Name Input Section -->
+        <div id="name-input-section" class="space-y-4">
+            <input type="text" id="dealer-name-input" class="w-full p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter Dealer Name">
+            <button id="verify-name-btn" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-blue-700 transition duration-300 ease-in-out transform hover:scale-105">
+                Verify Name
+            </button>
+        </div>
+
+        <!-- Location Check Section (initially hidden) -->
+        <div id="location-check-section" class="space-y-4 hidden">
+            <p class="text-gray-600 mb-6">Click the button below to check your location.</p>
+            <button id="check-location-btn" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-blue-700 transition duration-300 ease-in-out transform hover:scale-105">
+                Check My Location
+            </button>
+        </div>
+
+        <!-- Loader -->
+        <div id="loader" class="hidden mt-6">
+            <div class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] text-blue-600 motion-reduce:animate-[spin_1.5s_linear_infinite]" role="status">
+                <span class="!absolute !-m-px !h-px !-w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">Loading...</span>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- CONFIGURATION ---
+            // IMPORTANT: Replace these values with your actual data.
+            const DEALER_LOCATIONS = [
+                // Dealer A
+                { name: 'Dealer A', lat: -6.2088, lon: 106.8456 },
+                // Dealer B
+                { name: 'Dealer B', lat: -6.1754, lon: 106.8272 },
+                // Dealer C (Example for a new dealer)
+                { name: 'Dealer C', lat: -6.2297, lon: 106.8123 }
+                // Add more dealers here...
+            ];
+            
+            // The Google Form URL you want to redirect to
+            const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/YOUR_FORM_ID/viewform';
+
+            // The maximum allowed distance in meters.
+            const MAX_DISTANCE_METERS = 500;
+
+            // --- UI ELEMENTS ---
+            const nameInputSection = document.getElementById('name-input-section');
+            const locationCheckSection = document.getElementById('location-check-section');
+            const dealerNameInput = document.getElementById('dealer-name-input');
+            const verifyNameBtn = document.getElementById('verify-name-btn');
+            const checkLocationBtn = document.getElementById('check-location-btn');
+            const statusBox = document.getElementById('status-box');
+            const loader = document.getElementById('loader');
+
+            // Global variable to store the verified dealer's location data
+            let verifiedDealer = null;
+
+            // Function to update the status message
+            const updateStatus = (message, isError = false) => {
+                statusBox.textContent = message;
+                statusBox.classList.remove('border-gray-300', 'border-red-500', 'text-gray-700', 'text-red-700');
+                if (isError) {
+                    statusBox.classList.add('border-red-500', 'text-red-700');
+                } else {
+                    statusBox.classList.add('border-gray-300', 'text-gray-700');
+                }
+            };
+            
+            // Haversine formula to calculate distance between two lat/lon points
+            // Returns distance in meters
+            function getDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371e3; // metres
+                const φ1 = lat1 * Math.PI / 180; // φ, λ in radians
+                const φ2 = lat2 * Math.PI / 180;
+                const Δφ = (lat2 - lat1) * Math.PI / 180;
+                const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+                const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                          Math.cos(φ1) * Math.cos(φ2) *
+                          Math.sin(Δλ/2) * Math.sin(Δλ/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+                return R * c; // in metres
+            }
+
+            // Main function to handle the location check
+            const handleLocationCheck = () => {
+                if (!verifiedDealer) {
+                    updateStatus('Error: Please verify your name first.', true);
+                    return;
+                }
+
+                updateStatus('Requesting location...');
+                checkLocationBtn.disabled = true;
+                loader.classList.remove('hidden');
+
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            const userLat = position.coords.latitude;
+                            const userLon = position.coords.longitude;
+                            const distance = getDistance(userLat, userLon, verifiedDealer.lat, verifiedDealer.lon);
+                            
+                            console.log(`Distance to ${verifiedDealer.name}: ${distance.toFixed(2)} meters`);
+
+                            loader.classList.add('hidden');
+                            
+                            if (distance <= MAX_DISTANCE_METERS) {
+                                updateStatus(`Success! You are at ${verifiedDealer.name}. Redirecting to the form...`);
+                                setTimeout(() => {
+                                    window.location.href = GOOGLE_FORM_URL;
+                                }, 1500); // Redirect after a short delay
+                            } else {
+                                updateStatus('Error: You are not at the designated location. Access denied.', true);
+                                checkLocationBtn.disabled = false;
+                            }
+                        },
+                        (error) => {
+                            loader.classList.add('hidden');
+                            checkLocationBtn.disabled = false;
+                            switch(error.code) {
+                                case error.PERMISSION_DENIED:
+                                    updateStatus('Error: Geolocation access was denied. Please enable location services for this site.', true);
+                                    break;
+                                case error.POSITION_UNAVAILABLE:
+                                    updateStatus('Error: Location information is unavailable.', true);
+                                    break;
+                                case error.TIMEOUT:
+                                    updateStatus('Error: The request to get user location timed out.', true);
+                                    break;
+                                default:
+                                    updateStatus('Error: An unknown error occurred.', true);
+                                    break;
+                            }
+                        }
+                    );
+                } else {
+                    loader.classList.add('hidden');
+                    checkLocationBtn.disabled = false;
+                    updateStatus('Error: Geolocation is not supported by this browser.', true);
+                }
+            };
+
+            // Event listener for the "Verify Name" button
+            verifyNameBtn.addEventListener('click', () => {
+                const enteredName = dealerNameInput.value.trim();
+                const foundDealer = DEALER_LOCATIONS.find(dealer => dealer.name === enteredName);
+
+                if (foundDealer) {
+                    verifiedDealer = foundDealer;
+                    updateStatus(`Name verified! Now, please click the button to check your location for "${verifiedDealer.name}".`);
+                    nameInputSection.classList.add('hidden');
+                    locationCheckSection.classList.remove('hidden');
+                } else {
+                    updateStatus('Error: Invalid dealer name. Please try again.', true);
+                }
+            });
+            
+            // Add event listener to the "Check Location" button
+            checkLocationBtn.addEventListener('click', handleLocationCheck);
+        });
+    </script>
+
+</body>
+</html>
